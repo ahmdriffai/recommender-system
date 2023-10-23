@@ -6,18 +6,30 @@ import numpy as np
 from copy import deepcopy
 from scipy.spatial.distance import pdist, squareform
 import matplotlib.pyplot as plt
+import requests
 
+productapi = requests.get('http://127.0.0.1:8000/api/product').json()
+product = pd.DataFrame(productapi)
+product.rename(columns={
+    'id': 'product_id'
+}, inplace=True)
 
+ratingapi = requests.get('http://127.0.0.1:8000/api/rating').json()
+rating = pd.DataFrame(ratingapi)
 
-train_path = 'data/rating.csv'
-df = pd.read_csv(train_path,)
-utility = df.pivot(index = 'product_id', columns = 'user_id', values = 'rating')
+df = pd.merge(rating, product, on='product_id', how='inner')
+
+utility = df.pivot(index = 'name', columns = 'user_id', values = 'rating')
 utility = utility.fillna(0)
 
 
+a = rating.groupby('product_id')
+b = a.first()
+b['id'].index[1]
+
 # similarity = 1- distance
-distance_mtx = squareform(pdist(utility, 'cosine'))
-similarity_mtx = 1- distance_mtx
+# distance_mtx = squareform(pdist(utility, 'cosine'))
+# similarity_mtx = 1- distance_mtx
 
 item_similarity = utility.T.corr()
 similarity_mtx = item_similarity.to_numpy()
@@ -50,7 +62,7 @@ def recommendation_to_user(userid, top_n, similarity_mtx, utility):
     top_item = list(filter(lambda x: user_rating.iloc[x]==0, top_item))[:top_n]
     res = []
     for i in top_item:
-        res.append({"id": i, "pred" : pred_rating.iloc[i]})
+        res.append({"id": b['id'].index[i].item(), "pred" : pred_rating.iloc[i]})
 
     return res
 
@@ -59,7 +71,6 @@ product = pd.read_csv('data/products.csv')
 @app.route('/predict/<int:userid>/<int:top_n>')
 def index(userid, top_n):
     predict = recommendation_to_user(userid, top_n , similarity_mtx, utility)
-
     responses = []
     for i in predict:
         image = product.loc[product['id'] == i['id']]['image'].values[0]
@@ -71,6 +82,7 @@ def index(userid, top_n):
 
 
 if __name__ == '__main__':
+    app.run(debug = True)
     app.run(host='0.0.0.0', port=105)
 
 # predict = recommendation_to_user(1, 3 , similarity_mtx, utility)
@@ -89,3 +101,12 @@ if __name__ == '__main__':
 
 # name = product.loc[product['id'] == 2]['name'].to_string(index=False)
 
+# predict = recommendation_to_user(2, 30 , similarity_mtx, utility)
+# responses = []
+# for i in predict:
+#     image = product.loc[product['id'] == i['id']]['image'].values[0]
+#     name = product.loc[product['id'] == i['id']]['name'].values[0]
+
+#     responses.append({'id': i['id'], "name": name, "image": image})
+
+# print(responses)
